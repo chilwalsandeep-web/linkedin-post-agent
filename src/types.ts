@@ -43,5 +43,6 @@ export interface Job {
 
   // outcome
   postedToLinkedIn: boolean;
+  reviewNote?: string; // reviewer agent's human-ness / simplicity verdict
   error?: string;
 }

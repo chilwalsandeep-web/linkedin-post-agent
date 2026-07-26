@@ -5,6 +5,7 @@ import { logger } from "./lib/logger";
 import { createJob, loadJob, saveJob, imagePath, hasImageFile } from "./services/jobStore";
 import { generateHeadings } from "./services/research.service";
 import { writePost, buildImagePrompt } from "./services/writer.service";
+import { humanize } from "./services/reviewer.service";
 import { generateImage } from "./services/image.service";
 import { publishPost } from "./services/linkedin.service";
 import { sendHeadingsEmail, sendDraftEmail, sendApprovedEmail } from "./services/email.service";
@@ -108,6 +109,9 @@ app.post(
     saveJob(job);
 
     job.draft = await writePost(job);
+    const reviewed = await humanize(job, job.draft);
+    job.draft = reviewed.text;
+    job.reviewNote = reviewed.note;
 
     if (job.withImage && imageEnabled) {
       try {
@@ -160,6 +164,9 @@ app.post(
     saveJob(job);
 
     job.draft = await writePost(job);
+    const reviewed = await humanize(job, job.draft);
+    job.draft = reviewed.text;
+    job.reviewNote = reviewed.note;
     job.status = "review";
     saveJob(job);
 

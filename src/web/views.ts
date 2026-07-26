@@ -112,10 +112,12 @@ export function draftPage(job: Job): string {
     job.revisionNotes.length > 0
       ? `<p class="muted">Revisions so far: ${job.revisionNotes.length}</p>`
       : "";
+  const review = job.reviewNote ? `<p class="muted">🧑 Human-check: ${esc(job.reviewNote)}</p>` : "";
   return layout(
     "Review your post",
     `<h1>📝 Review your post</h1>
      <div class="card"><div class="post">${nl2br(job.draft ?? "")}</div>${image}</div>
+     ${review}
      ${history}
      <form method="post" action="/jobs/${job.id}/approve">
        <button class="btn" type="submit">✅ Approve &amp; post</button>
@@ -175,6 +177,7 @@ export function emailDraftHtml(job: Job): string {
     <h2>Your draft is ready</h2>
     <div style="white-space:pre-wrap;background:#f4f6f8;padding:16px;border-radius:8px">${esc(job.draft ?? "")}</div>
     ${image}
+    ${job.reviewNote ? `<p style="color:#777;font-size:13px">🧑 Human-check: ${esc(job.reviewNote)}</p>` : ""}
     <p style="margin-top:16px">
       <a href="${url(`/jobs/${job.id}`)}"
          style="display:inline-block;background:#0a66c2;color:#fff;padding:11px 18px;border-radius:6px;text-decoration:none">Open to approve or suggest changes</a>
