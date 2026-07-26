@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.env
+*.log
+
+# Per-job data + generated images (personal / runtime)
+data/jobs/
