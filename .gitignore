@@ -5,3 +5,5 @@ dist/
 
 # Per-job data + generated images (personal / runtime)
 data/jobs/
+# Stored OAuth tokens (secrets) — never commit
+data/connections.json

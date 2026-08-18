@@ -17,6 +17,12 @@ const schema = z.object({
   OPENAI_API_KEY: z.string().optional(),
   IMAGE_SIZE: z.string().default("1024x1024"),
 
+  // OAuth "Connect LinkedIn" (one app you own; users just click Allow)
+  LINKEDIN_CLIENT_ID: z.string().optional(),
+  LINKEDIN_CLIENT_SECRET: z.string().optional(),
+  LINKEDIN_REDIRECT_URI: z.string().url().default("http://localhost:3000/auth/linkedin/callback"),
+
+  // Legacy static token fallback (your own hand-pasted token)
   LINKEDIN_ACCESS_TOKEN: z.string().optional(),
   LINKEDIN_AUTHOR_URN: z.string().optional(),
 });
@@ -40,3 +46,4 @@ export const emailTo = env.EMAIL_TO || env.GMAIL_USER || "";
 export const emailEnabled = Boolean(env.GMAIL_USER && env.GMAIL_APP_PASSWORD);
 export const imageEnabled = Boolean(env.IMAGE_PROVIDER === "openai" && env.OPENAI_API_KEY);
 export const linkedinEnabled = Boolean(env.LINKEDIN_ACCESS_TOKEN && env.LINKEDIN_AUTHOR_URN);
+export const linkedinOAuthConfigured = Boolean(env.LINKEDIN_CLIENT_ID && env.LINKEDIN_CLIENT_SECRET);

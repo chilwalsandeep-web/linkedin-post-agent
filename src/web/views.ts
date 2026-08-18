@@ -1,5 +1,6 @@
 import { env } from "../config/env";
 import { PostResult } from "../services/linkedin.service";
+import { LinkedInConnection } from "../services/connectionStore";
 import { Job, TONES, PLATFORMS } from "../types";
 
 export function esc(s: string): string {
@@ -57,6 +58,7 @@ export function formPage(): string {
     "New LinkedIn post",
     `<h1>✍️ New LinkedIn post</h1>
      <p class="muted">Give a topic and a tone. The agent researches it and emails you 4 angles to choose from.</p>
+     <p class="muted"><a href="/account">Connect / manage LinkedIn &rarr;</a></p>
      <form method="post" action="/jobs" class="card">
        <label for="topic">Topic to post about</label>
        <textarea id="topic" name="topic" placeholder="e.g. What AI agents mean for product managers in 2026" required></textarea>
@@ -147,6 +149,27 @@ export function approvedPage(job: Job, result: PostResult): string {
 
 export function errorPage(message: string): string {
   return layout("Error", `<h1>⚠️ Something went wrong</h1><div class="card">${esc(message)}</div><p><a class="btn" href="/">Start over</a></p>`);
+}
+
+export function accountPage(conn: LinkedInConnection | null, configured: boolean): string {
+  let body: string;
+  if (conn) {
+    body = `<h1>LinkedIn connected</h1>
+     <div class="card"><b>${esc(conn.name)}</b>${conn.email ? `<br><span class="muted">${esc(conn.email)}</span>` : ""}
+       <p class="muted">Approved posts will publish to this account's feed automatically.</p></div>
+     <form method="post" action="/account/disconnect"><button class="btn secondary" type="submit">Disconnect</button></form>
+     <p style="margin-top:14px"><a class="btn ghost" href="/">&larr; New post</a></p>`;
+  } else if (!configured) {
+    body = `<h1>Connect LinkedIn</h1>
+     <div class="card">LinkedIn sign-in isn't set up yet. Add <b>LINKEDIN_CLIENT_ID</b> and <b>LINKEDIN_CLIENT_SECRET</b> to <code>.env</code>, and make sure <code>${esc(env.LINKEDIN_REDIRECT_URI)}</code> is listed under your LinkedIn app &rarr; Auth &rarr; Authorized redirect URLs.</div>
+     <p style="margin-top:14px"><a class="btn ghost" href="/">&larr; New post</a></p>`;
+  } else {
+    body = `<h1>Connect LinkedIn</h1>
+     <p>Connect your LinkedIn once so approved posts publish for you automatically. It's one click — you'll just approve on LinkedIn's screen.</p>
+     <p style="margin-top:14px"><a class="btn" href="/connect/linkedin">Connect LinkedIn</a></p>
+     <p style="margin-top:14px"><a class="btn ghost" href="/">&larr; New post</a></p>`;
+  }
+  return layout("Account", body);
 }
 
 // ---------- Email templates ----------
