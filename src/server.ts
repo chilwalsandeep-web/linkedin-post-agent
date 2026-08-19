@@ -20,6 +20,8 @@ import {
   approvedPage,
   errorPage,
   accountPage,
+  privacyPage,
+  termsPage,
 } from "./web/views";
 import { Job, Platform, TONES, Tone, PLATFORMS } from "./types";
 
@@ -66,6 +68,8 @@ app.get("/health", (_req, res) => res.json({ ok: true }));
 
 // --- Account / Connect LinkedIn ---
 app.get("/account", (_req, res) => res.send(accountPage(getConnection(), linkedinOAuthConfigured)));
+app.get("/privacy", (_req, res) => res.send(privacyPage()));
+app.get("/terms", (_req, res) => res.send(termsPage()));
 
 app.get("/connect/linkedin", (_req, res) => {
   if (!linkedinOAuthConfigured) {
