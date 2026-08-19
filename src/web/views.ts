@@ -1,5 +1,6 @@
 import { env } from "../config/env";
 import { PostResult } from "../services/linkedin.service";
+import { LinkedInConnection } from "../services/connectionStore";
 import { Job, TONES, PLATFORMS } from "../types";
 
 export function esc(s: string): string {
@@ -57,6 +58,7 @@ export function formPage(): string {
     "New LinkedIn post",
     `<h1>✍️ New LinkedIn post</h1>
      <p class="muted">Give a topic and a tone. The agent researches it and emails you 4 angles to choose from.</p>
+     <p class="muted"><a href="/account">Connect / manage LinkedIn &rarr;</a></p>
      <form method="post" action="/jobs" class="card">
        <label for="topic">Topic to post about</label>
        <textarea id="topic" name="topic" placeholder="e.g. What AI agents mean for product managers in 2026" required></textarea>
@@ -147,6 +149,77 @@ export function approvedPage(job: Job, result: PostResult): string {
 
 export function errorPage(message: string): string {
   return layout("Error", `<h1>⚠️ Something went wrong</h1><div class="card">${esc(message)}</div><p><a class="btn" href="/">Start over</a></p>`);
+}
+
+export function privacyPage(): string {
+  return layout(
+    "Privacy Policy",
+    `<h1>Privacy Policy</h1>
+     <div class="card">
+       <p>This app helps you draft and publish LinkedIn posts on your own LinkedIn account. We store only the data needed to operate the service.</p>
+       <h2>Information we collect</h2>
+       <ul>
+         <li>LinkedIn profile identity information such as your name, email, and member ID when you connect your account.</li>
+         <li>OAuth access tokens and refresh tokens used to publish to your own LinkedIn feed.</li>
+         <li>Job details you enter in the app, such as post topic, tone, selected heading, draft text, and revision notes.</li>
+       </ul>
+       <h2>How we use it</h2>
+       <ul>
+         <li>To generate research, draft posts, and send review emails.</li>
+         <li>To publish approved content to your LinkedIn account through the official LinkedIn API.</li>
+         <li>To keep your account connected so future approvals can publish automatically.</li>
+       </ul>
+       <h2>Storage</h2>
+       <p>Connection data and job data are stored locally in this application environment (for example, in the app's data folder). If you deploy this service publicly, the owner should use secure hosting and encrypted storage for all tokens.</p>
+       <h2>Your rights</h2>
+       <p>You can disconnect your LinkedIn account at any time from the account page. That removes the stored connection from the app.</p>
+       <p>We do not sell personal data. We do not use your data for unrelated marketing or scraping activity.</p>
+     </div>
+     <p><a class="btn ghost" href="/account">&larr; Back to account</a></p>`,
+  );
+}
+
+export function termsPage(): string {
+  return layout(
+    "Terms",
+    `<h1>Terms of Service</h1>
+     <div class="card">
+       <p>By using this service, you agree to use it to create and publish content to your own LinkedIn account only.</p>
+       <h2>Human approval</h2>
+       <p>Nothing is published to LinkedIn without your explicit review and approval. The app may generate a draft, but the final posting decision always rests with you.</p>
+       <h2>LinkedIn compliance</h2>
+       <p>This service uses the official LinkedIn API and only posts to your own feed. It is not intended for spam, automation without consent, or posting on behalf of other accounts or company pages.</p>
+       <h2>Account and token responsibility</h2>
+       <p>You are responsible for keeping your LinkedIn app configuration and tokens secure. If your account configuration changes, reconnect your LinkedIn account as needed.</p>
+       <h2>Service availability</h2>
+       <p>We may update, pause, or discontinue the service as needed. We do not guarantee uninterrupted availability or specific posting results.</p>
+     </div>
+     <p><a class="btn ghost" href="/account">&larr; Back to account</a></p>`,
+  );
+}
+
+export function accountPage(conn: LinkedInConnection | null, configured: boolean): string {
+  let body: string;
+  if (conn) {
+    body = `<h1>LinkedIn connected</h1>
+     <div class="card"><b>${esc(conn.name)}</b>${conn.email ? `<br><span class="muted">${esc(conn.email)}</span>` : ""}
+       <p class="muted">Approved posts will publish to this account's feed automatically.</p></div>
+     <form method="post" action="/account/disconnect"><button class="btn secondary" type="submit">Disconnect</button></form>
+     <p style="margin-top:14px"><a class="btn ghost" href="/privacy">Privacy Policy</a> <a class="btn ghost" href="/terms">Terms</a></p>
+     <p style="margin-top:14px"><a class="btn ghost" href="/">&larr; New post</a></p>`;
+  } else if (!configured) {
+    body = `<h1>Connect LinkedIn</h1>
+     <div class="card">LinkedIn sign-in isn't set up yet. Add <b>LINKEDIN_CLIENT_ID</b> and <b>LINKEDIN_CLIENT_SECRET</b> to <code>.env</code>, and make sure <code>${esc(env.LINKEDIN_REDIRECT_URI)}</code> is listed under your LinkedIn app &rarr; Auth &rarr; Authorized redirect URLs.</div>
+     <p style="margin-top:14px"><a class="btn ghost" href="/privacy">Privacy Policy</a> <a class="btn ghost" href="/terms">Terms</a></p>
+     <p style="margin-top:14px"><a class="btn ghost" href="/">&larr; New post</a></p>`;
+  } else {
+    body = `<h1>Connect LinkedIn</h1>
+     <p>Connect your LinkedIn once so approved posts publish for you automatically. It's one click — you'll just approve on LinkedIn's screen.</p>
+     <p style="margin-top:14px"><a class="btn" href="/connect/linkedin">Connect LinkedIn</a></p>
+     <p style="margin-top:14px"><a class="btn ghost" href="/privacy">Privacy Policy</a> <a class="btn ghost" href="/terms">Terms</a></p>
+     <p style="margin-top:14px"><a class="btn ghost" href="/">&larr; New post</a></p>`;
+  }
+  return layout("Account", body);
 }
 
 // ---------- Email templates ----------

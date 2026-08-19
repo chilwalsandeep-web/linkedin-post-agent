@@ -1,6 +1,7 @@
 import express, { Request, Response } from "express";
 import fs from "fs";
-import { env, emailEnabled, imageEnabled, linkedinEnabled } from "./config/env";
+import crypto from "crypto";
+import { env, emailEnabled, imageEnabled, linkedinEnabled, linkedinOAuthConfigured } from "./config/env";
 import { logger } from "./lib/logger";
 import { createJob, loadJob, saveJob, imagePath, hasImageFile } from "./services/jobStore";
 import { generateHeadings } from "./services/research.service";
@@ -8,6 +9,8 @@ import { writePost, buildImagePrompt } from "./services/writer.service";
 import { humanize } from "./services/reviewer.service";
 import { generateImage } from "./services/image.service";
 import { publishPost } from "./services/linkedin.service";
+import { buildAuthUrl, exchangeCode, fetchUserInfo, toConnection } from "./services/linkedinAuth";
+import { getConnection, clearConnection, saveConnection } from "./services/connectionStore";
 import { sendHeadingsEmail, sendDraftEmail, sendApprovedEmail } from "./services/email.service";
 import {
   formPage,
@@ -16,11 +19,28 @@ import {
   draftPage,
   approvedPage,
   errorPage,
+  accountPage,
+  privacyPage,
+  termsPage,
 } from "./web/views";
 import { Job, Platform, TONES, Tone, PLATFORMS } from "./types";
 
 const app = express();
 app.use(express.urlencoded({ extended: true }));
+
+// Short-lived OAuth CSRF state (in-memory; fine for single-process local use).
+const pendingStates = new Map<string, number>();
+function newState(): string {
+  const s = crypto.randomBytes(16).toString("hex");
+  pendingStates.set(s, Date.now() + 10 * 60 * 1000);
+  return s;
+}
+function consumeState(s: string): boolean {
+  const exp = pendingStates.get(s);
+  if (!exp || exp < Date.now()) return false;
+  pendingStates.delete(s);
+  return true;
+}
 
 type Handler = (req: Request, res: Response) => Promise<void>;
 const wrap =
@@ -45,6 +65,43 @@ function getJobOr404(req: Request, res: Response): Job | null {
 app.get("/", (_req, res) => res.send(formPage()));
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
+
+// --- Account / Connect LinkedIn ---
+app.get("/account", (_req, res) => res.send(accountPage(getConnection(), linkedinOAuthConfigured)));
+app.get("/privacy", (_req, res) => res.send(privacyPage()));
+app.get("/terms", (_req, res) => res.send(termsPage()));
+
+app.get("/connect/linkedin", (_req, res) => {
+  if (!linkedinOAuthConfigured) {
+    res.status(400).send(errorPage("LinkedIn sign-in isn't configured yet. Set LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET in .env."));
+    return;
+  }
+  res.redirect(buildAuthUrl(newState()));
+});
+
+app.get(
+  "/auth/linkedin/callback",
+  wrap(async (req, res) => {
+    if (req.query.error) {
+      res.status(400).send(errorPage(`LinkedIn: ${String(req.query.error_description ?? req.query.error)}`));
+      return;
+    }
+    if (!consumeState(String(req.query.state ?? ""))) {
+      res.status(400).send(errorPage("Your sign-in session expired. Please connect again."));
+      return;
+    }
+    const token = await exchangeCode(String(req.query.code ?? ""));
+    const info = await fetchUserInfo(token.access_token);
+    saveConnection(toConnection(token, info));
+    logger.info(`LinkedIn connected: ${info.name} (${info.sub})`);
+    res.redirect("/account");
+  }),
+);
+
+app.post("/account/disconnect", (_req, res) => {
+  clearConnection();
+  res.redirect("/account");
+});
 
 // --- Submit form -> research + 4 headings -> email ---
 app.post(
@@ -206,5 +263,13 @@ app.get("/jobs/:id/image.png", (req, res) => {
 
 app.listen(env.PORT, () => {
   logger.info(`LinkedIn post agent running at ${env.PUBLIC_BASE_URL} (port ${env.PORT})`);
-  logger.info(`Email: ${emailEnabled ? "on" : "OFF (drive from browser)"} · Images: ${imageEnabled ? "on" : "OFF"} · LinkedIn: ${linkedinEnabled ? "auto-post" : "copy-paste"}`);
+  const conn = getConnection();
+  const li = conn
+    ? `connected as ${conn.name}`
+    : linkedinOAuthConfigured
+      ? "Connect available (/account)"
+      : linkedinEnabled
+        ? "static token"
+        : "copy-paste";
+  logger.info(`Email: ${emailEnabled ? "on" : "OFF (drive from browser)"} · Images: ${imageEnabled ? "on" : "OFF"} · LinkedIn: ${li}`);
 });

@@ -1,6 +1,7 @@
 import fs from "fs";
 import { env, linkedinEnabled } from "../config/env";
 import { logger } from "../lib/logger";
+import { getValidConnection } from "./linkedinAuth";
 
 export interface PostResult {
   posted: boolean; // true = pushed to LinkedIn, false = copy-paste mode
@@ -8,30 +9,45 @@ export interface PostResult {
 }
 
 const LI_BASE = "https://api.linkedin.com";
-const HEADERS = () => ({
-  Authorization: `Bearer ${env.LINKEDIN_ACCESS_TOKEN}`,
-  "Content-Type": "application/json",
-  "X-Restli-Protocol-Version": "2.0.0",
-});
+
+function headers(token: string): Record<string, string> {
+  return {
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
+    "X-Restli-Protocol-Version": "2.0.0",
+  };
+}
 
 /**
- * Publish text (and optionally an image) to LinkedIn.
- *
- * Runs only when LINKEDIN_ACCESS_TOKEN + LINKEDIN_AUTHOR_URN are set. Until your
- * LinkedIn app + `w_member_social` scope is approved, leave them blank — this
- * returns copy-paste mode and the caller emails you the finished post instead.
+ * Resolve which token + author to post as:
+ *  1. an OAuth-connected account (preferred; auto-refreshed), else
+ *  2. a static token from .env (legacy fallback), else
+ *  3. nothing -> copy-paste mode.
+ */
+async function resolvePoster(): Promise<{ token: string; author: string } | null> {
+  const conn = await getValidConnection();
+  if (conn) return { token: conn.accessToken, author: `urn:li:person:${conn.sub}` };
+  if (linkedinEnabled && env.LINKEDIN_ACCESS_TOKEN && env.LINKEDIN_AUTHOR_URN) {
+    return { token: env.LINKEDIN_ACCESS_TOKEN, author: env.LINKEDIN_AUTHOR_URN };
+  }
+  return null;
+}
+
+/**
+ * Publish text (and optionally an image) to the connected member's own feed.
+ * Returns copy-paste mode if no account is connected/configured.
  */
 export async function publishPost(text: string, imageFile?: string | null): Promise<PostResult> {
-  if (!linkedinEnabled) {
-    return { posted: false, message: "LinkedIn not configured — copy-paste mode." };
+  const poster = await resolvePoster();
+  if (!poster) {
+    return { posted: false, message: "No LinkedIn account connected — copy-paste mode." };
   }
-
-  const author = env.LINKEDIN_AUTHOR_URN as string;
+  const { token, author } = poster;
 
   let assetUrn: string | null = null;
   if (imageFile && fs.existsSync(imageFile)) {
     try {
-      assetUrn = await uploadImage(author, imageFile);
+      assetUrn = await uploadImage(token, author, imageFile);
     } catch (err) {
       logger.warn(`Image upload to LinkedIn failed, posting text only: ${(err as Error).message}`);
     }
@@ -44,9 +60,7 @@ export async function publishPost(text: string, imageFile?: string | null): Prom
       "com.linkedin.ugc.ShareContent": {
         shareCommentary: { text },
         shareMediaCategory: assetUrn ? "IMAGE" : "NONE",
-        ...(assetUrn
-          ? { media: [{ status: "READY", media: assetUrn }] }
-          : {}),
+        ...(assetUrn ? { media: [{ status: "READY", media: assetUrn }] } : {}),
       },
     },
     visibility: { "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC" },
@@ -54,7 +68,7 @@ export async function publishPost(text: string, imageFile?: string | null): Prom
 
   const res = await fetch(`${LI_BASE}/v2/ugcPosts`, {
     method: "POST",
-    headers: HEADERS(),
+    headers: headers(token),
     body: JSON.stringify(body),
   });
 
@@ -68,10 +82,10 @@ export async function publishPost(text: string, imageFile?: string | null): Prom
 }
 
 /** Register + upload an image, returning its asset URN. */
-async function uploadImage(author: string, imageFile: string): Promise<string> {
+async function uploadImage(token: string, author: string, imageFile: string): Promise<string> {
   const registerRes = await fetch(`${LI_BASE}/v2/assets?action=registerUpload`, {
     method: "POST",
-    headers: HEADERS(),
+    headers: headers(token),
     body: JSON.stringify({
       registerUploadRequest: {
         recipes: ["urn:li:digitalmediaRecipe:feedshare-image"],
@@ -98,7 +112,7 @@ async function uploadImage(author: string, imageFile: string): Promise<string> {
   const bytes = fs.readFileSync(imageFile);
   const putRes = await fetch(uploadUrl, {
     method: "PUT",
-    headers: { Authorization: `Bearer ${env.LINKEDIN_ACCESS_TOKEN}` },
+    headers: { Authorization: `Bearer ${token}` },
     body: bytes,
   });
   if (!putRes.ok) throw new Error(`binary upload ${putRes.status}`);
