@@ -29,21 +29,53 @@ prefetch can't auto-trigger).
 ## File map
 ```
 src/
-  config/env.ts            validated env + feature flags
-  lib/                     anthropic client, claude web-search helper, logger, json
+  app/                     Next.js App Router (pages + route handlers)
+    page.tsx                 the form
+    layout.tsx globals.css   shell, nav, footer, design tokens
+    error.tsx not-found.tsx  boundaries
+    jobs/route.ts            POST /jobs  -> research + 4 angles + email
+    jobs/[id]/page.tsx       one page, four states (angles / image? / draft / done)
+    jobs/[id]/select/[index]/route.ts   the email link; sets the angle
+    jobs/[id]/generate|revise|approve/route.ts
+    jobs/[id]/image.png/route.ts        serves the image from KV
+    account/ connect/ auth/  OAuth + connection management
+    privacy/ terms/ error/ health/
+  components/              Steps, SubmitButton, PostPreview, CopyButton, LegalDoc
+  config/env.ts            zod-validated Worker bindings + feature flags
+  content/legal.ts         privacy/terms copy as data (the tests assert on it)
+  emails/templates.ts      HTML email bodies (angles, draft, approved)
+  lib/                     anthropic, claude web-search helper, http, json, logger
   services/
-    jobStore.ts            per-job JSON (+ <id>.png image)
-    research.service.ts    Claude + web search → 4 headings + brief
-    writer.service.ts      Claude → post (simple/human/original prompt)
-    reviewer.service.ts    scores human+simple, rewrites up to 2 rounds
-    image.service.ts       OpenAI gpt-image-1 (off unless OPENAI_API_KEY set)
-    email.service.ts       nodemailer/Gmail → headings, draft, approved emails
-    linkedin.service.ts    UGC post via connected account (env token fallback)
-    linkedinAuth.ts        OAuth: auth URL, code exchange, refresh, userinfo
-    connectionStore.ts     stores the connected account + tokens (data/connections.json)
-  web/views.ts             HTML for pages + email templates
-  server.ts                Express routes (the whole flow + /account + OAuth)
+    jobStore.ts              jobs + images in KV (job:<id>, job:<id>:image)
+    oauthState.ts            short-lived CSRF nonces in KV
+    research.service.ts      Claude + web search -> 4 angles + brief
+    writer.service.ts        Claude -> post (simple/human/original prompt)
+    reviewer.service.ts      scores human+simple, rewrites up to 2 rounds
+    image.service.ts         OpenAI gpt-image-1 (off unless OPENAI_API_KEY set)
+    email.service.ts         Resend HTTP API -> angles, draft, approved emails
+    linkedin.service.ts      UGC post via connected account (env token fallback)
+    linkedinAuth.ts          OAuth: auth URL, code exchange, refresh, userinfo
+    connectionStore.ts       the connected account + tokens (KV connection:current)
+next.config.ts             + initOpenNextCloudflareForDev() for `next dev`
+open-next.config.ts        Cloudflare adapter config (no ISR cache needed)
+wrangler.jsonc             Worker name, KV binding, non-secret vars
+types/cloudflare-runtime.d.ts  minimal KVNamespace/Fetcher shim (see gotchas)
+.github/workflows/         ci.yml, deploy.yml, secrets-sync.yml
 ```
+
+## Architecture notes (Next.js on Workers)
+- **Why a shape change at all:** the app moved Express -> Hono/Workers -> Next.js on
+  Workers (`@opennextjs/cloudflare`). Every URL and every prompt is unchanged; only
+  the framework around them moved.
+- **Bindings:** there is no `process.env`. `src/config/env.ts` calls
+  `getCloudflareContext().env`, validates it with zod once per isolate, and
+  re-exposes a plain `env` object through a `Proxy`, so `services/` and `lib/` read
+  `env.ANTHROPIC_API_KEY` exactly as they always did.
+- **Mutations:** route handlers do the work then return a **303 redirect** to a page
+  (post/redirect/get), so a refresh never re-runs a paid Claude call. GET
+  `/jobs/:id/select/:i` stays a GET because it is the link inside the email.
+- **Every route is `force-dynamic`** — they all read KV or call Claude, so nothing
+  is prerendered except `/privacy`, `/terms` and the 404.
 
 ## The reviewer agent (owner cares a lot about this)
 Writer prompt targets plain, simple, human, ORIGINAL text and bans AI clichés
@@ -64,8 +96,10 @@ a true scan (Copyleaks/Originality.ai) is a possible later add-on.
   marketing analytics, which we deliberately avoid.
 - To make it usable by others: **verify the app** with the Company Page + a real
   Privacy Policy URL. That's it.
-- Redirect URI (register in the app): `http://localhost:3000/auth/linkedin/callback`
-  (add the production URL later).
+- Redirect URI (register in the app): the deployed
+  `https://<worker-url>/auth/linkedin/callback`, plus
+  `http://localhost:3000/auth/linkedin/callback` for local dev. It must match
+  `LINKEDIN_REDIRECT_URI` exactly.
 - Access tokens ~60 days; refresh tokens (~1 yr) auto-refresh in `linkedinAuth.ts`
   if issued.
 
@@ -102,19 +136,34 @@ Also considered/safe extras: content calendar, post-idea generator, "link in fir
 comment" option (reach-safe), multiple saved voices, team seats later.
 
 ## Gotchas / notes
-- Windows: restarts can fail with **port 3000 in use** because `npx ts-node`
-  spawns a child node that keeps the port after the parent is killed. Kill the
-  listener on 3000 first. (This repo's smoke tests launch via
-  `node -e "require('ts-node/register'); require('./src/server.ts')"` to avoid the
-  orphan.)
+- **Don't add `@cloudflare/workers-types` to tsconfig `types`.** It redeclares DOM
+  globals (`Request`, `Response`, `fetch`) and collides with the `DOM` lib that
+  Next/React need — `NextResponse` starts failing to typecheck. Instead,
+  `cloudflare-env.d.ts` is generated with `--include-runtime false` and
+  `types/cloudflare-runtime.d.ts` hand-declares just `KVNamespace` + `Fetcher`.
+  Rerun `npm run cf-typegen` after editing `wrangler.jsonc`.
+- **`PUBLIC_BASE_URL` and `LINKEDIN_REDIRECT_URI` live in `wrangler.jsonc` vars**
+  and point at the deployed Worker. `.dev.vars` overrides them with localhost for
+  local dev. The redirect URI must match the LinkedIn app registration exactly.
+- Email links point at `PUBLIC_BASE_URL` — they only work once it is a real public
+  URL.
+- The old `.env` / `data/` directory are leftovers from the Express era. Nothing
+  reads them; jobs and tokens are in KV.
+- Windows: `npm run preview` can leave `workerd.exe` holding port 8787 after a
+  kill. Kill the stray processes before rerunning.
 - Git shows LF→CRLF warnings on Windows — harmless.
-- Email links point at `PUBLIC_BASE_URL` (localhost for now) — only work while the
-  server runs on that machine. For remote use, deploy and set `PUBLIC_BASE_URL`.
 
 ## Immediate next steps
-1. Owner adds `LINKEDIN_CLIENT_SECRET` to `.env`, registers the redirect URI,
-   verifies the app + adds a privacy policy URL.
-2. Test Connect LinkedIn end-to-end (`/account` → Connect → Allow → approve a draft
+1. `npx wrangler login` → `npx wrangler kv namespace create KV` → paste the id into
+   `wrangler.jsonc` → `npm run deploy`.
+2. Set `PUBLIC_BASE_URL` + `LINKEDIN_REDIRECT_URI` to the deployed URL, redeploy,
+   and register that redirect URI in the LinkedIn app.
+3. Push the secrets (`wrangler secret put`, or GitHub secrets + the **Sync Worker
+   secrets** workflow), and add `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` so
+   push-to-`main` deploys.
+4. Test Connect LinkedIn end-to-end (`/account` → Connect → Allow → approve a draft
    → confirm it posts).
-3. Start **P1 (multi-user foundation)** on `dev`.
-4. Draft Privacy Policy + Terms (needed for the LinkedIn app + storing user tokens).
+5. Point the LinkedIn app's Privacy Policy URL at the deployed `/privacy` and verify
+   the app with the Company Page.
+6. Start **P1 (multi-user foundation)** on `dev` — the single-tenant KV keys
+   (`connection:current`) are the thing to shard per user.

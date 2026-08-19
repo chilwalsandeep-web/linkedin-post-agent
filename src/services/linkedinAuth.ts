@@ -97,7 +97,7 @@ export function toConnection(token: TokenResponse, info: UserInfo): LinkedInConn
  * connection (not connected, or expired with no refresh token -> reconnect).
  */
 export async function getValidConnection(): Promise<LinkedInConnection | null> {
-  const conn = getConnection();
+  const conn = await getConnection();
   if (!conn) return null;
   if (Date.now() < conn.expiresAt - 60_000) return conn; // still valid (60s buffer)
 
@@ -109,7 +109,7 @@ export async function getValidConnection(): Promise<LinkedInConnection | null> {
     const token = await refreshAccessToken(conn.refreshToken);
     const updated = toConnection(token, { sub: conn.sub, name: conn.name, email: conn.email });
     if (!updated.refreshToken) updated.refreshToken = conn.refreshToken; // keep old if none returned
-    saveConnection(updated);
+    await saveConnection(updated);
     logger.info("Refreshed LinkedIn access token.");
     return updated;
   } catch (err) {

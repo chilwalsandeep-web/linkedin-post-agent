@@ -1,31 +1,33 @@
 {
   "name": "linkedin-post-agent",
-  "version": "0.1.0",
-  "description": "Form-triggered LinkedIn post agent: research -> 4 headings by email -> pick one -> AI-drafted post (optional image) -> approve/revise -> post to LinkedIn.",
-  "type": "commonjs",
-  "main": "dist/server.js",
-  "engines": {
-    "node": ">=18.0.0"
-  },
+  "version": "0.2.0",
+  "private": true,
+  "description": "Next.js LinkedIn post agent on Cloudflare Workers: research -> 4 angles by email -> pick one -> AI-drafted post (optional image) -> approve/revise -> post to LinkedIn.",
+  "type": "module",
   "scripts": {
-    "dev": "nodemon --watch src --ext ts --exec ts-node src/server.ts",
-    "start": "node dist/server.js",
-    "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "cf:build": "opennextjs-cloudflare build",
+    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "cf-typegen": "wrangler types --env-interface CloudflareEnv --include-runtime false --strict-vars false cloudflare-env.d.ts",
+    "test": "node --test \"test/**/*.test.ts\""
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.70.0",
-    "dotenv": "^16.4.7",
-    "express": "^4.21.2",
-    "nodemailer": "^6.9.16",
+    "next": "^16.3.1",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {
-    "@types/express": "^4.17.21",
+    "@opennextjs/cloudflare": "^1.20.2",
     "@types/node": "^22.10.2",
-    "@types/nodemailer": "^6.4.17",
-    "nodemon": "^3.1.9",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.7.2"
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "typescript": "^5.7.2",
+    "wrangler": "^4.124.0"
   }
 }

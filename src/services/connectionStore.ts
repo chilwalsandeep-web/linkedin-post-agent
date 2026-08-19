@@ -1,5 +1,4 @@
-import fs from "fs";
-import path from "path";
+import { kv } from "../config/env";
 
 /** A LinkedIn account connected via OAuth (holds the member's tokens). */
 export interface LinkedInConnection {
@@ -14,33 +13,16 @@ export interface LinkedInConnection {
 }
 
 // Single-connection store for now (one user). Multi-tenant later keys by userId.
-interface Store {
-  current: LinkedInConnection | null;
+const KEY = "connection:current";
+
+export async function getConnection(): Promise<LinkedInConnection | null> {
+  return (await kv().get<LinkedInConnection>(KEY, "json")) ?? null;
 }
 
-const FILE = path.join(process.cwd(), "data", "connections.json");
-
-function read(): Store {
-  try {
-    return JSON.parse(fs.readFileSync(FILE, "utf-8")) as Store;
-  } catch {
-    return { current: null };
-  }
+export async function saveConnection(conn: LinkedInConnection): Promise<void> {
+  await kv().put(KEY, JSON.stringify(conn));
 }
 
-function write(store: Store): void {
-  fs.mkdirSync(path.dirname(FILE), { recursive: true });
-  fs.writeFileSync(FILE, JSON.stringify(store, null, 2), "utf-8");
-}
-
-export function getConnection(): LinkedInConnection | null {
-  return read().current;
-}
-
-export function saveConnection(conn: LinkedInConnection): void {
-  write({ current: conn });
-}
-
-export function clearConnection(): void {
-  write({ current: null });
+export async function clearConnection(): Promise<void> {
+  await kv().delete(KEY);
 }

@@ -1,0 +1,44 @@
+name: CI
+
+# Runs on every PR and on the dev branch. Same steps the deploy workflow runs
+# before it ships, so a green PR means main can deploy.
+on:
+  pull_request:
+  push:
+    branches: [dev]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  verify:
+    name: Typecheck, test, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      # Builds Next.js *and* the Cloudflare Worker bundle, so a Worker-only
+      # failure (bundling, nodejs_compat) is caught before it reaches main.
+      - name: Build Worker bundle
+        run: npm run cf:build

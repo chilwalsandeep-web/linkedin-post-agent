@@ -32,11 +32,11 @@ export async function ask(opts: AskOpts): Promise<string> {
   if (research) req.tools = [WEB_SEARCH];
 
   try {
-    let resp = await anthropic.messages.create(req);
+    let resp = await anthropic().messages.create(req);
     let guard = 0;
     while (resp.stop_reason === "pause_turn" && guard < 4) {
       req.messages.push({ role: "assistant", content: resp.content });
-      resp = await anthropic.messages.create(req);
+      resp = await anthropic().messages.create(req);
       guard += 1;
     }
     return firstText(resp);

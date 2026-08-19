@@ -1,0 +1,34 @@
+# Local secrets + local overrides for `npm run dev` and `wrangler dev`.
+# Copy to `.dev.vars` (gitignored) and fill in. Non-secret production config
+# lives in wrangler.jsonc "vars"; in production these keys are Worker secrets
+# (`wrangler secret put NAME`) or GitHub secrets synced by the CI workflow.
+
+# ---- Core ----
+# Anthropic (Claude) — research + writing. https://console.anthropic.com
+ANTHROPIC_API_KEY=
+
+# ---- Local URL overrides ----
+# wrangler.jsonc points these at the deployed Worker; override for local dev.
+# `npm run dev` (next dev) serves on :3000, `npm run preview` (workerd) on :8787.
+PUBLIC_BASE_URL=http://localhost:3000
+LINKEDIN_REDIRECT_URI=http://localhost:3000/auth/linkedin/callback
+
+# ---- Email via Resend (HTTP API; Workers cannot open SMTP sockets) ----
+# Leave blank to run with email OFF and drive the whole flow from the browser.
+RESEND_API_KEY=
+EMAIL_FROM=
+EMAIL_TO=
+
+# ---- Image generation (optional) ----
+# Set IMAGE_PROVIDER=openai in wrangler.jsonc vars to switch images on.
+OPENAI_API_KEY=
+
+# ---- LinkedIn "Connect" OAuth app ----
+# One app you own. Users click Connect and approve — they never see a secret.
+# Add LINKEDIN_REDIRECT_URI to LinkedIn app -> Auth -> Authorized redirect URLs.
+LINKEDIN_CLIENT_ID=
+LINKEDIN_CLIENT_SECRET=
+
+# ---- Legacy fallback token (used only when no account is connected) ----
+LINKEDIN_ACCESS_TOKEN=
+LINKEDIN_AUTHOR_URN=

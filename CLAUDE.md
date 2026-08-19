@@ -22,35 +22,54 @@ the **shadow-ban-safe** side of LinkedIn.
 - Workflow: build on `dev`, owner reviews, then merge to `main`.
 
 ## Stack
-- Node + TypeScript, **Express** (server-rendered HTML pages + email templates).
+- **Next.js 16** (App Router, React Server Components) on **Cloudflare Workers**
+  via `@opennextjs/cloudflare`. Pages are RSC; mutations are route handlers that
+  do the work and 303-redirect to a page.
 - `@anthropic-ai/sdk` — Claude **Sonnet 5** for research/write/review; uses the
   `web_search` server tool. Models are env-configurable.
 - OpenAI `gpt-image-1` for images (**currently off**).
-- `nodemailer` via **Gmail SMTP** for email.
-- **File-based storage** (no DB yet): `data/jobs/<id>.json`, `data/connections.json`.
+- **Resend** HTTP API for email (Workers can't open SMTP sockets — no nodemailer).
+- **Workers KV** for everything: `job:<id>`, `job:<id>:image`,
+  `connection:current`, `oauthstate:<nonce>`.
 
-## Secrets live in `.env` (gitignored — NEVER commit)
-Names only (values are in `.env`): `ANTHROPIC_API_KEY`, `GMAIL_USER`,
-`GMAIL_APP_PASSWORD`, `LINKEDIN_CLIENT_ID` (=`77bkjyko1zaqav`),
-`LINKEDIN_CLIENT_SECRET` (⏳ owner still to paste), `LINKEDIN_REDIRECT_URI`,
-`LINKEDIN_ACCESS_TOKEN` + `LINKEDIN_AUTHOR_URN` (legacy fallback token),
-`OPENAI_API_KEY` (empty → images off). Also gitignored: `data/jobs/`,
-`data/connections.json`.
+## Config & secrets
+- **Non-secret vars** live in `wrangler.jsonc` -> `vars` (`PUBLIC_BASE_URL`,
+  `LINKEDIN_REDIRECT_URI`, `RESEARCH_MODEL`, `WRITER_MODEL`, `IMAGE_PROVIDER`,
+  `IMAGE_SIZE`). These are committed — never put a secret there.
+- **Secrets** are Worker secrets in production and `.dev.vars` locally (gitignored;
+  template in `.dev.vars.example`): `ANTHROPIC_API_KEY`, `RESEND_API_KEY`,
+  `EMAIL_FROM`, `EMAIL_TO`, `LINKEDIN_CLIENT_ID` (=`77bkjyko1zaqav`),
+  `LINKEDIN_CLIENT_SECRET`, `LINKEDIN_ACCESS_TOKEN` + `LINKEDIN_AUTHOR_URN`
+  (legacy fallback token), `OPENAI_API_KEY` (empty -> images off).
+- The old `.env` is **dead config** — nothing reads it. Bindings come from
+  `getCloudflareContext()`; `src/config/env.ts` validates them with zod and
+  re-exposes an `env` object so the service layer is unchanged.
 
-## Current state (as of the handoff)
-- Core flow (research → headings → write → reviewer → email → approve/post) is
-  **built and tested working** with real keys.
-- **Connect LinkedIn (OAuth)** is built on `dev`: `/account` → "Connect LinkedIn"
-  → Allow → tokens stored + auto-refreshed → posts go to the connected feed.
-  Files: `src/services/linkedinAuth.ts`, `src/services/connectionStore.ts`;
-  routes in `src/server.ts` (`/connect/linkedin`, `/auth/linkedin/callback`,
-  `/account`).
+## Current state (on `dev`)
+- Core flow (research → angles → write → reviewer → email → approve/post) is
+  **built and tested working** with real keys, now on Next.js + Workers.
+- **Connect LinkedIn (OAuth)** is built: `/account` → "Connect LinkedIn" → Allow →
+  tokens stored in KV + auto-refreshed → posts go to the connected feed.
+  Files: `src/services/linkedinAuth.ts`, `connectionStore.ts`, `oauthState.ts`;
+  routes under `src/app/connect/`, `src/app/auth/`, `src/app/account/`.
+- **CI/CD**: `.github/workflows/` — `ci.yml` (PRs + `dev`), `deploy.yml` (push to
+  `main` → Cloudflare), `secrets-sync.yml` (manual).
+- **Not yet deployed.** `wrangler` isn't logged in and the KV namespace id in
+  `wrangler.jsonc` is still `PLACEHOLDER_REPLACE_AFTER_KV_CREATE`.
 
 ## Immediate pending (owner actions)
-1. Paste **Primary Client Secret** into `LINKEDIN_CLIENT_SECRET=` in `.env`.
-2. In the LinkedIn app → Auth → add redirect URL `http://localhost:3000/auth/linkedin/callback`.
-3. **Verify the app** with the "Sandeep Automation" Company Page + add a real
-   Privacy Policy URL. (Member posting is self-serve — no multi-month review.)
+1. `npx wrangler login`, then `npx wrangler kv namespace create KV` and paste the
+   id into `wrangler.jsonc`.
+2. `npm run deploy`, then set `PUBLIC_BASE_URL` + `LINKEDIN_REDIRECT_URI` in
+   `wrangler.jsonc` vars to the real Worker URL and redeploy.
+3. `wrangler secret put` each secret (or add them as GitHub secrets and run the
+   **Sync Worker secrets** workflow).
+4. Add `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` as GitHub repo secrets so
+   push-to-`main` deploys.
+5. In the LinkedIn app → Auth → add the deployed redirect URL.
+6. **Verify the app** with the "Sandeep Automation" Company Page + point the
+   Privacy Policy URL at `/privacy`. (Member posting is self-serve — no
+   multi-month review.)
 
 ## Hard constraints — keep it shadow-ban-safe (do not violate)
 - **Official LinkedIn API only.** Never browser bots, cookie/session hacks, or
@@ -63,10 +82,11 @@ Names only (values are in `.env`): `ANTHROPIC_API_KEY`, `GMAIL_USER`,
   cookie/extension analytics that Taplio uses.
 
 ## Commands
-- `npm run dev` → http://localhost:3000
-- `npm run typecheck` · `npm run build`
-- If a restart fails with port 3000 in use, a stale `npx` child is holding it —
-  kill the listener on 3000, then rerun.
+- `npm run dev` → http://localhost:3000 (Next dev, real CF bindings)
+- `npm run preview` → http://localhost:8787 (the actual Worker in workerd)
+- `npm run typecheck` · `npm test` · `npm run cf:build` · `npm run deploy`
+- Every route is `force-dynamic` — they all read KV or call Claude.
+- If port 8787 is stuck after a preview, kill leftover `workerd.exe` processes.
 
 ## More context
 - Full journey, decisions, cost math, and the P0–P7 roadmap: **`HANDOFF.md`**.

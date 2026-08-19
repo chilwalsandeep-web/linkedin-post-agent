@@ -1,0 +1,38 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "linkedin-post-agent",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "observability": {
+    "enabled": true
+  },
+
+  // Non-secret config. Secrets (ANTHROPIC_API_KEY, RESEND_API_KEY,
+  // LINKEDIN_CLIENT_SECRET, ...) live in `.dev.vars` locally and in Worker
+  // secrets in production — never here.
+  "vars": {
+    "RESEARCH_MODEL": "claude-sonnet-5",
+    "WRITER_MODEL": "claude-sonnet-5",
+    "IMAGE_PROVIDER": "none",
+    "IMAGE_SIZE": "1024x1024",
+
+    // Update both of these to the deployed URL after the first `npm run deploy`,
+    // and add the redirect URI to LinkedIn app -> Auth -> Authorized redirect URLs.
+    "PUBLIC_BASE_URL": "https://linkedin-post-agent.workers.dev",
+    "LINKEDIN_REDIRECT_URI": "https://linkedin-post-agent.workers.dev/auth/linkedin/callback"
+  },
+
+  // Jobs, generated images, OAuth state and the LinkedIn connection.
+  // Create with: wrangler kv namespace create KV
+  "kv_namespaces": [
+    {
+      "binding": "KV",
+      "id": "PLACEHOLDER_REPLACE_AFTER_KV_CREATE"
+    }
+  ]
+}

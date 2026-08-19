@@ -1,4 +1,3 @@
-import fs from "fs";
 import { env, linkedinEnabled } from "../config/env";
 import { logger } from "../lib/logger";
 import { getValidConnection } from "./linkedinAuth";
@@ -27,7 +26,7 @@ function headers(token: string): Record<string, string> {
 async function resolvePoster(): Promise<{ token: string; author: string } | null> {
   const conn = await getValidConnection();
   if (conn) return { token: conn.accessToken, author: `urn:li:person:${conn.sub}` };
-  if (linkedinEnabled && env.LINKEDIN_ACCESS_TOKEN && env.LINKEDIN_AUTHOR_URN) {
+  if (linkedinEnabled() && env.LINKEDIN_ACCESS_TOKEN && env.LINKEDIN_AUTHOR_URN) {
     return { token: env.LINKEDIN_ACCESS_TOKEN, author: env.LINKEDIN_AUTHOR_URN };
   }
   return null;
@@ -37,7 +36,7 @@ async function resolvePoster(): Promise<{ token: string; author: string } | null
  * Publish text (and optionally an image) to the connected member's own feed.
  * Returns copy-paste mode if no account is connected/configured.
  */
-export async function publishPost(text: string, imageFile?: string | null): Promise<PostResult> {
+export async function publishPost(text: string, imageBytes?: ArrayBuffer | null): Promise<PostResult> {
   const poster = await resolvePoster();
   if (!poster) {
     return { posted: false, message: "No LinkedIn account connected — copy-paste mode." };
@@ -45,9 +44,9 @@ export async function publishPost(text: string, imageFile?: string | null): Prom
   const { token, author } = poster;
 
   let assetUrn: string | null = null;
-  if (imageFile && fs.existsSync(imageFile)) {
+  if (imageBytes) {
     try {
-      assetUrn = await uploadImage(token, author, imageFile);
+      assetUrn = await uploadImage(token, author, imageBytes);
     } catch (err) {
       logger.warn(`Image upload to LinkedIn failed, posting text only: ${(err as Error).message}`);
     }
@@ -82,7 +81,7 @@ export async function publishPost(text: string, imageFile?: string | null): Prom
 }
 
 /** Register + upload an image, returning its asset URN. */
-async function uploadImage(token: string, author: string, imageFile: string): Promise<string> {
+async function uploadImage(token: string, author: string, imageBytes: ArrayBuffer): Promise<string> {
   const registerRes = await fetch(`${LI_BASE}/v2/assets?action=registerUpload`, {
     method: "POST",
     headers: headers(token),
@@ -109,11 +108,10 @@ async function uploadImage(token: string, author: string, imageFile: string): Pr
   const uploadUrl =
     reg.value.uploadMechanism["com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest"].uploadUrl;
 
-  const bytes = fs.readFileSync(imageFile);
   const putRes = await fetch(uploadUrl, {
     method: "PUT",
     headers: { Authorization: `Bearer ${token}` },
-    body: bytes,
+    body: imageBytes,
   });
   if (!putRes.ok) throw new Error(`binary upload ${putRes.status}`);
 

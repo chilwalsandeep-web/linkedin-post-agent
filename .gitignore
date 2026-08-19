@@ -1,9 +1,23 @@
 node_modules/
-dist/
-.env
 *.log
 
-# Per-job data + generated images (personal / runtime)
-data/jobs/
-# Stored OAuth tokens (secrets) — never commit
-data/connections.json
+# Next.js
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+
+# Cloudflare Workers / OpenNext
+.open-next/
+.wrangler/
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+
+# Secrets
+.env
+.env.local
+
+# Legacy local runtime (jobs + OAuth tokens now live in Workers KV)
+dist/
+data/
