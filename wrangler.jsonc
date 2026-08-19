@@ -23,8 +23,8 @@
 
     // Update both of these to the deployed URL after the first `npm run deploy`,
     // and add the redirect URI to LinkedIn app -> Auth -> Authorized redirect URLs.
-    "PUBLIC_BASE_URL": "https://linkedin-post-agent.workers.dev",
-    "LINKEDIN_REDIRECT_URI": "https://linkedin-post-agent.workers.dev/auth/linkedin/callback"
+    "PUBLIC_BASE_URL": "https://linkedin-post-agent.chilwalsandeep.workers.dev",
+    "LINKEDIN_REDIRECT_URI": "https://linkedin-post-agent.chilwalsandeep.workers.dev/auth/linkedin/callback"
   },
 
   // Jobs, generated images, OAuth state and the LinkedIn connection.
@@ -32,7 +32,7 @@
   "kv_namespaces": [
     {
       "binding": "KV",
-      "id": "PLACEHOLDER_REPLACE_AFTER_KV_CREATE"
+      "id": "65f99c8875ef4cd99c2e2b1604abb35d"
     }
   ]
 }
